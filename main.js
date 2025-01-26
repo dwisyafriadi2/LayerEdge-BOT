@@ -84,7 +84,12 @@ class WalletDashboard {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       },
-      timeout: 600000,
+      timeout: 30000,
+      maxRetries: 20,
+      retryDelay: 2000,
+      retryCondition: (error) => {
+        return axios.isNetworkError(error) || error.code === "ETIMEDOUT";
+      },
     });
   }
 
@@ -109,14 +114,28 @@ class WalletDashboard {
     }
   }
 
-  async checkNodeStatus(wallet) {
-    try {
-      const response = await this.getApi().get(
-        `/light-node/node-status/${wallet}`
-      );
-      return response.data?.data?.startTimestamp !== null;
-    } catch (error) {
-      throw new Error(`Check status failed: ${error.message}`);
+  async checkNodeStatus(wallet, retries = 20) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await this.getApi().get(
+          `/light-node/node-status/${wallet}`
+        );
+        return response.data?.data?.startTimestamp !== null;
+      } catch (error) {
+        if (i === retries - 1) {
+          if (error.code === "ETIMEDOUT" || error.code === "ECONNABORTED") {
+            throw new Error(
+              "Connection timeout, please check your internet connection"
+            );
+          }
+          if (error.response?.status === 404) {
+            throw new Error("Node not found");
+          }
+          throw new Error(`Check status failed: ${error.message}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        continue;
+      }
     }
   }
 

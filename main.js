@@ -3,6 +3,7 @@ import axios from "axios";
 import readline from "readline";
 import { getBanner } from "./config/banner.js";
 import { colors } from "./config/colors.js";
+import { Wallet } from "ethers";
 
 const CONFIG = {
   PING_INTERVAL: 0.5,
@@ -23,6 +24,7 @@ class WalletDashboard {
     this.isRunning = true;
     this.pingIntervals = new Map();
     this.walletStats = new Map();
+    this.privateKeys = new Map();
     this.renderTimeout = null;
     this.lastRender = 0;
     this.minRenderInterval = 100;
@@ -31,16 +33,35 @@ class WalletDashboard {
   async initialize() {
     try {
       const data = await fs.readFile("data.txt", "utf8");
-      this.wallets = data.split("\n").filter((line) => line.trim() !== "");
-      for (let wallet of this.wallets) {
-        this.walletStats.set(wallet, {
-          status: "Starting",
-          lastPing: "-",
-          points: 0,
-          error: null,
-        });
+      const privateKeys = data.split("\n").filter((line) => line.trim() !== "");
 
-        this.startPing(wallet);
+      this.wallets = [];
+      this.privateKeys = new Map();
+
+      for (let privateKey of privateKeys) {
+        try {
+          const wallet = new Wallet(privateKey);
+          const address = wallet.address;
+          this.wallets.push(address);
+          this.privateKeys.set(address, privateKey);
+
+          this.walletStats.set(address, {
+            status: "Starting",
+            lastPing: "-",
+            points: 0,
+            error: null,
+          });
+
+          this.startPing(address);
+        } catch (error) {
+          console.error(
+            `${colors.error}Invalid private key: ${privateKey} - ${error.message}${colors.reset}`
+          );
+        }
+      }
+
+      if (this.wallets.length === 0) {
+        throw new Error("No valid private keys found in data.txt");
       }
     } catch (error) {
       console.error(
@@ -52,24 +73,59 @@ class WalletDashboard {
 
   getApi() {
     return axios.create({
-      baseURL: "https://dashboard.layeredge.io/api",
+      baseURL: "https://referral-api.layeredge.io/api",
       headers: {
         Accept: "*/*",
         "Accept-Encoding": "gzip, deflate, br",
         "Accept-Language": "en-US,en;q=0.9",
         "Content-Type": "application/json",
-        Origin: "https://dashboard.layeredge.io",
-        Referer: "https://dashboard.layeredge.io/",
+        Origin: "https://referral-api.layeredge.io",
+        Referer: "https://referral-api.layeredge.io/",
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       },
+      timeout: 60000,
     });
+  }
+
+  async signAndStart(wallet, privateKey) {
+    try {
+      const walletInstance = new Wallet(privateKey);
+      const timestamp = Date.now();
+      const message = `Node activation request for ${wallet} at ${timestamp}`;
+      const sign = await walletInstance.signMessage(message);
+
+      const response = await this.getApi().post(
+        `/light-node/node-action/${wallet}/start`,
+        {
+          sign: sign,
+          timestamp: timestamp,
+        }
+      );
+
+      return response.data?.message === "node action executed successfully";
+    } catch (error) {
+      throw new Error(`Node activation failed: ${error.message}`);
+    }
+  }
+
+  async checkNodeStatus(wallet) {
+    try {
+      const response = await this.getApi().get(
+        `/light-node/node-status/${wallet}`
+      );
+      return response.data?.data?.startTimestamp !== null;
+    } catch (error) {
+      throw new Error(`Check status failed: ${error.message}`);
+    }
   }
 
   async checkPoints(wallet) {
     try {
-      const response = await this.getApi().get(`/node-points?wallet=${wallet}`);
-      return response.data;
+      const response = await this.getApi().get(
+        `/referral/wallet-details/${wallet}`
+      );
+      return response.data?.data?.nodePoints || 0;
     } catch (error) {
       throw new Error(`Check points failed: ${error.message}`);
     }
@@ -77,11 +133,15 @@ class WalletDashboard {
 
   async updatePoints(wallet) {
     try {
-      const response = await this.getApi().post("/node-points", {
-        walletAddress: wallet,
-        lastStartTime: Date.now(),
-      });
-      return response.data;
+      const timestamp = Date.now();
+
+      const isRunning = await this.checkNodeStatus(wallet);
+      if (!isRunning) {
+        throw new Error("Node not running");
+      }
+
+      const points = await this.checkPoints(wallet);
+      return { nodePoints: points };
     } catch (error) {
       if (error.response) {
         switch (error.response.status) {
@@ -89,22 +149,13 @@ class WalletDashboard {
             throw new Error("Internal Server Error");
           case 504:
             throw new Error("Gateway Timeout");
+          case 403:
+            throw new Error("Node not activated");
           default:
             throw new Error(`Update points failed: ${error.message}`);
         }
       }
-      throw new Error(`Update points failed: ${error.message}`);
-    }
-  }
-
-  async claimPoints(wallet) {
-    try {
-      const response = await this.getApi().post("/claim-points", {
-        walletAddress: wallet,
-      });
-      return response.data;
-    } catch (error) {
-      throw new Error(`Claim points failed: ${error.message}`);
+      throw error;
     }
   }
 
@@ -113,24 +164,39 @@ class WalletDashboard {
       return;
     }
 
-    try {
-      await this.claimPoints(wallet);
-      this.walletStats.get(wallet).status = "Claimed";
-    } catch (error) {
-      this.walletStats.get(wallet).status = "Claim Failed";
-    }
+    const stats = this.walletStats.get(wallet);
 
     try {
+      const privateKey = this.privateKeys.get(wallet);
+      if (!privateKey) {
+        throw new Error("Private key not found for wallet");
+      }
+
+      stats.status = "Checking Status";
+      this.renderDashboard();
+
+      const isRunning = await this.checkNodeStatus(wallet);
+      if (!isRunning) {
+        stats.status = "Activating";
+        this.renderDashboard();
+
+        await this.signAndStart(wallet, privateKey);
+        stats.status = "Activated";
+        this.renderDashboard();
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+
       const result = await this.updatePoints(wallet);
-      const stats = this.walletStats.get(wallet);
       stats.lastPing = new Date().toLocaleTimeString();
       stats.points = result.nodePoints || stats.points;
       stats.status = "Active";
       stats.error = null;
     } catch (error) {
-      const stats = this.walletStats.get(wallet);
       stats.status = "Error";
       stats.error = error.message;
+      console.error(`Error starting node for ${wallet}:`, error.message);
+      return;
     }
 
     const pingInterval = setInterval(async () => {
@@ -231,11 +297,15 @@ class WalletDashboard {
         return colors.success;
       case "Error":
         return colors.error;
-      case "Claimed":
+      case "Activated":
         return colors.taskComplete;
-      case "Claim Failed":
+      case "Activation Failed":
         return colors.taskFailed;
       case "Starting":
+        return colors.taskInProgress;
+      case "Checking Status":
+        return colors.taskInProgress;
+      case "Activating":
         return colors.taskInProgress;
       default:
         return colors.reset;

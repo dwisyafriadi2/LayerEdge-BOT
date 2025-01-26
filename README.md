@@ -4,21 +4,22 @@ An automation tool designed to help users manage their LayerEdge light nodes eff
 
 ## Features
 
-- 🚀 Auto Ping for Light Node
-- 💰 Automatic Daily Points Claim
-- 📊 Real-time Points Tracking
-- 🎯 Multi-wallet Support
-- 💻 Interactive Terminal Dashboard
-- 🎨 Colored Status Indicators
-- 📱 Pagination for Multiple Accounts
+- Secure Private Key Management
+- Auto Node Activation & Ping
+- Points Tracking System
+- Multi-wallet Support
+- Interactive Terminal Dashboard
+- Colored Status Indicators
+- Pagination for Multiple Accounts
 
 ## Prerequisites
 
 Before running the bot, make sure you have:
 
-- Node.js (v14 or higher)
+- Node.js (v16 or higher)
 - npm (Node Package Manager)
 - A LayerEdge account (register with referral code: `7FYJLWy2`)
+- Wallet private keys for activation
 
 ## Registration
 
@@ -44,23 +45,23 @@ cd LayerEdge-BOT
 3. Install dependencies:
 
 ```bash
-npm install
+npm install axios ethers figlet
 ```
 
-4. Edit configuration:
+4. Configure your wallets:
    - Edit `data.txt` file in the root directory
-   - Add your wallet addresses (one per line)
+   - Add your wallet private keys (one per line)`
 
 ## Project Structure
 
 ```
 LayerEdge/
-├── main.js
-├── data.txt
-├── package.json
+├── main.js          # Main application file
+├── data.txt         # Private keys configuration
+├── package.json     # Project dependencies
 └── config/
-    ├── banner.js
-    ├── colors.js
+    ├── banner.js    # Dashboard banner configuration
+    ├── colors.js    # Color scheme configuration
     └── ...
 ```
 
@@ -79,44 +80,49 @@ node main.js
 
 ## Features Explained
 
-### Auto Ping
+### Secure Key Management
 
-- Automatically pings the LayerEdge network every configured interval
-- Keeps your light node active and earning points
+- Reads private keys from data.txt
+- Automatically derives wallet addresses
+- Secure signing for node activation
+
+### Node Activation & Ping
+
+- Automatic node status checking
+- Signature-based node activation
+- Continuous ping to maintain node status
 - Configurable ping interval
 
-### Points Claiming
+### Status Monitoring
 
-- Automatically attempts to claim daily points
-- Tracks claim status and results
-- Shows error messages if claim fails
+- Real-time status updates
+- Points tracking
+- Detailed error reporting
+- Multiple status indicators:
+  - 🔵 Starting: Initial setup
+  - 🟡 Checking Status: Verifying node status
+  - 🟣 Activating: Node activation in progress
+  - 🟢 Active: Node running successfully
+  - 🔴 Error: Error encountered
+  - 🟢 Activated: Node activation successful
 
 ### Dashboard Interface
 
 - Clean and intuitive terminal interface
-- Real-time status updates
+- Real-time updates
 - Color-coded status indicators
-- Pagination for managing multiple wallets
-
-### Error Handling
-
-- Comprehensive error reporting
-- Automatic retry mechanism
-- Clear error messages
-
-## Status Colors
-
-- 🟢 Active: Node is running normally
-- 🔴 Error: Node encountered an error
-- 🟡 Starting: Node is initializing
-- 🟢 Claimed: Points successfully claimed
-- 🔴 Claim Failed: Failed to claim points
+- Pagination for multiple wallets
+- Error message display
 
 ## Support & Links
 
 - GitHub: [https://github.com/Galkurta](https://github.com/Galkurta)
 - Telegram: [https://t.me/galkurtarchive](https://t.me/galkurtarchive)
 - Referral Code: `7FYJLWy2`
+
+## Security Notice
+
+**Important**: Your private keys are sensitive information. Never share them with anyone and ensure `data.txt` is properly secured and not shared publicly.
 
 ## Contributing
 
@@ -128,4 +134,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Disclaimer
 
-This bot is provided as-is, without any warranties. Users are responsible for their own actions and should use this tool responsibly.
+This bot is provided as-is, without any warranties. Users are responsible for their own actions and should use this tool responsibly. Never share your private keys and always verify the source code before running any automated tools.

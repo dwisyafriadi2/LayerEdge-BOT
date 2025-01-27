@@ -33,7 +33,7 @@ Before running the bot, make sure you have:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/Galkurta/LayerEdge-BOT.git
+https://github.com/dwisyafriadi2/LayerEdge-BOT.git
 ```
 
 2. Navigate to the project directory:
@@ -114,10 +114,9 @@ node main.js
 - Pagination for multiple wallets
 - Error message display
 
-## Support & Links
+## Source Creator
 
 - GitHub: [https://github.com/Galkurta](https://github.com/Galkurta)
-- Telegram: [https://t.me/galkurtarchive](https://t.me/galkurtarchive)
 - Referral Code: `7FYJLWy2`
 
 ## Security Notice
